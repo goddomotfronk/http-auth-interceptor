@@ -51,25 +51,36 @@
                 $httpProvider.interceptors.push([
                     '$rootScope', '$q', 'httpBuffer', function ($rootScope, $q, httpBuffer) {
                         return {
+                            request: function(config) {
+                                if (!config.timeout) {
+                                    config.timeout = 5000;
+                                }
+                                return config;
+                            },
                             responseError: function (rejection) {
                                 if (rejection.status === 401 && !rejection.config.ignoreAuthModule) {
-                                    var deferred = $q.defer();
-                                    httpBuffer.append(rejection.config, deferred);
-                                    $rootScope.$broadcast('event:auth-loginRequired', rejection);
-                                    return deferred.promise;
+                                    if ($.cookie('rememberMeTicket')) {
+                                        if ($.cookie('firstTimeReq')) {
+                                            //remove first time cookie
+                                            $.removeCookie('firstTimeReq', {path: '/', domain: 'ubi.com'});
+                                        } else {
+                                            var deferred = $q.defer();
+                                            httpBuffer.append(rejection.config, deferred);
+                                            $rootScope.$broadcast('event:session-expired', rejection);
+                                            return deferred.promise;
+                                        }
+                                    } else {
+                                        var deferred = $q.defer();
+                                        httpBuffer.append(rejection.config, deferred);
+                                        $rootScope.$broadcast('event:session-expired', rejection);
+                                        return deferred.promise;
+                                    }
                                 }
 
-                                if ( rejection.status === 410 && !rejection.config.ignoreAuthModule) {
+                                if (rejection.status === 500 && !rejection.config.ignoreAuthModule) {
                                     var deferred = $q.defer();
                                     httpBuffer.append(rejection.config, deferred);
-                                    $rootScope.$broadcast('event:auth-expired', rejection);
-                                    return deferred.promise;
-                                }
-
-                                if (rejection.status === 403 && !rejection.config.ignoreAuthModule) {
-                                    var deferred = $q.defer();
-                                    httpBuffer.append(rejection.config, deferred);
-                                    $rootScope.$broadcast('event:auth-notAuthorized', rejection);
+                                    $rootScope.$broadcast('event:ws-error', rejection);
                                     return deferred.promise;
                                 }
 
